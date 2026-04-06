@@ -1,35 +1,78 @@
-const Comment = require('../models/Comment');
-const Reply = require('../models/Reply');
+const Comment = require("../models/Comment");
+const Notification = require("../models/Notification");
+const Post = require("../models/Post");
 
+// 🚀 Create comment or reply
 exports.createComment = async (req, res) => {
-  const { text } = req.body;
+  try {
+    const { text, postId, parentId } = req.body;
 
-  const comment = await Comment.create({
-    post: req.params.postId,
-    author: req.user._id,
-    text,
-  });
+    if (!text || !postId) {
+      return res.status(400).json({
+        message: "Text and postId required",
+      });
+    }
 
-  res.json(comment);
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const comment = await Comment.create({
+      text,
+      post: postId,
+      parent: parentId || null,
+      user: req.user._id,
+    });
+
+    const post = await Post.findById(postId);
+
+    if (!postId) {
+      return res.status(404).json({
+        message: "Post not found",
+      });
+    }
+    if (!post) {
+      return res.status(404).json({
+        message: "Post not found",
+      });
+    }
+
+    if (post && post.author) {
+      if (post.author.toString() !== req.user._id.toString()) {
+        const notif = await Notification.create({
+          recipient: post.author,
+          sender: req.user._id,
+          type: "comment",
+          post: postId,
+        });
+
+        global.io.to(post.author.toString()).emit("notification", notif);
+      }
+    }
+
+    const populated = await comment.populate("user", "firstName lastName");
+
+    res.status(201).json(populated);
+  } catch (err) {
+    console.error("COMMENT ERROR:", err);
+    res.status(500).json({ message: err.message });
+  }
 };
 
+// 🚀 Get comments
 exports.getComments = async (req, res) => {
-  const comments = await Comment.find({ post: req.params.postId })
-    .populate('author', 'firstName lastName avatar')
-    .sort({ createdAt: -1 });
+  try {
+    const comments = await Comment.find({
+      post: req.params.postId,
+    })
+      .populate("user", "firstName lastName")
+      .sort({ createdAt: -1 });
 
-  res.json(comments);
-};
-
-exports.toggleLikeComment = async (req, res) => {
-  const comment = await Comment.findById(req.params.id);
-
-  const index = comment.likes.indexOf(req.user._id);
-
-  if (index === -1) comment.likes.push(req.user._id);
-  else comment.likes.splice(index, 1);
-
-  await comment.save();
-
-  res.json(comment);
+    res.json(comments);
+  } catch (err) {
+    console.error("Get Comments Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
 };

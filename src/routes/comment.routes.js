@@ -1,14 +1,11 @@
-const router = require('express').Router();
-const auth = require('../middlewares/auth.middleware');
-
+const router = require("express").Router();
 const {
   createComment,
   getComments,
-  toggleLikeComment,
-} = require('../controllers/comment.controller');
+} = require("../controllers/comment.controller");
+const auth = require("../middlewares/auth.middleware");
 
-router.post('/:postId', auth, createComment);
-router.get('/:postId', auth, getComments);
-router.post('/:id/like', auth, toggleLikeComment);
+router.post("/", auth, createComment);
+router.get("/:postId", auth, getComments);
 
 module.exports = router;
